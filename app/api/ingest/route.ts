@@ -6,9 +6,9 @@ import type { metricsDaily } from "@/lib/db/imcc-schema";
 import { scopedDb } from "@/lib/db/scoped";
 import { CsvSource } from "@/lib/ingestion/csv-source";
 import {
-  chunkText,
+  chunkPages,
   classifyDocument,
-  extractText,
+  extractPages,
   type KnowledgeKind,
 } from "@/lib/ingestion/knowledge";
 import { normalize } from "@/lib/ingestion/normalizer";
@@ -67,9 +67,61 @@ export async function POST(request: NextRequest) {
   }
   const sdb = scopedDb(ctx.orgId);
 
-  const form = await request.formData();
+  // --- Large-file path: process a file already uploaded to Vercel Blob ------
+  // The browser sends { blobUrl, filename } as JSON (no big binary body), we
+  // fetch the bytes server-side and run the same extract → chunk → embed flow.
+  if ((request.headers.get("content-type") ?? "").includes("application/json")) {
+    const { blobUrl, filename } = (await request.json()) as {
+      blobUrl?: string;
+      filename?: string;
+    };
+    if (!(blobUrl && filename)) {
+      return NextResponse.json(
+        { error: "blobUrl and filename are required" },
+        { status: 400 }
+      );
+    }
+    const docType = classifyDocument(filename, "");
+    if (!docType) {
+      return NextResponse.json(
+        { error: `Unsupported file type: ${filename}. Use PDF, DOCX, TXT, or MD.` },
+        { status: 415 }
+      );
+    }
+    // Queue only — return instantly. The background worker (/api/cron/embed)
+    // fetches the blob, extracts pages, and embeds chunks resumably. This is
+    // what makes large documents (textbooks) production-safe.
+    const [doc] = await sdb.createKnowledgeDocument({
+      clientId: null,
+      title: filename,
+      kind: "strategy_note",
+      source: blobUrl,
+      status: "queued",
+    });
+    return NextResponse.json({
+      ok: true,
+      type: "queued",
+      documentId: doc.id,
+      status: "queued",
+    });
+  }
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    // Body too large / truncated (Next.js caps request bodies ~10MB, Vercel
+    // functions ~4.5MB). Return JSON so the client shows a real message.
+    return NextResponse.json(
+      {
+        error:
+          "File is too large to upload directly (limit ~10MB). Use a smaller file.",
+      },
+      { status: 413 }
+    );
+  }
   const file = form.get("file");
-  const clientId = form.get("clientId");
+  const clientIdRaw = form.get("clientId");
   const platformRaw = String(form.get("platform") ?? "other");
   const kind = (String(form.get("kind") ?? "strategy_note") ||
     "strategy_note") as KnowledgeKind;
@@ -77,15 +129,16 @@ export async function POST(request: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "file is required" }, { status: 400 });
   }
-  if (typeof clientId !== "string" || !clientId) {
-    return NextResponse.json(
-      { error: "clientId is required" },
-      { status: 400 }
-    );
-  }
-  if (!(await sdb.ownsClient(clientId))) {
-    // Either the client doesn't exist or belongs to another org — same answer.
-    return NextResponse.json({ error: "Unknown client" }, { status: 404 });
+
+  // clientId is optional. Without one, an upload becomes agency-wide knowledge
+  // (clientId = null) — which the chatbot's searchKnowledge tool still finds.
+  let clientId: string | null = null;
+  if (typeof clientIdRaw === "string" && clientIdRaw) {
+    if (!(await sdb.ownsClient(clientIdRaw))) {
+      // Either the client doesn't exist or belongs to another org.
+      return NextResponse.json({ error: "Unknown client" }, { status: 404 });
+    }
+    clientId = clientIdRaw;
   }
 
   const platform: Platform = PLATFORMS.includes(platformRaw as Platform)
@@ -98,14 +151,22 @@ export async function POST(request: NextRequest) {
   let blobUrl: string | undefined;
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const blob = await put(`uploads/${ctx.orgId}/${clientId}/${safe}`, file, {
-      access: "public",
-    });
+    const blob = await put(
+      `uploads/${ctx.orgId}/${clientId ?? "shared"}/${safe}`,
+      file,
+      { access: "public" }
+    );
     blobUrl = blob.url;
   }
 
-  // --- CSV → metrics --------------------------------------------------------
+  // --- CSV → metrics (requires a client to attach the numbers to) -----------
   if (isCsv) {
+    if (!clientId) {
+      return NextResponse.json(
+        { error: "CSV metrics require a client. Upload a PDF/DOCX/TXT/MD for the knowledge base instead." },
+        { status: 400 }
+      );
+    }
     const [audit] = await sdb.createUpload({
       clientId,
       filename: file.name,
@@ -140,18 +201,23 @@ export async function POST(request: NextRequest) {
 
   // --- PDF / DOCX / text → knowledge ---------------------------------------
   if (docType) {
-    const [audit] = await sdb.createUpload({
-      clientId,
-      filename: file.name,
-      platform: "other",
-      blobUrl,
-    });
+    // The Upload audit row requires a client, so only record it when we have
+    // one; client-less (agency-wide) uploads skip the audit but still ingest.
+    const [audit] = clientId
+      ? await sdb.createUpload({
+          clientId,
+          filename: file.name,
+          platform: "other",
+          blobUrl,
+        })
+      : [null];
     try {
-      const text = await extractText(await file.arrayBuffer(), docType);
-      const chunks = chunkText(text);
+      const pages = await extractPages(await file.arrayBuffer(), docType);
+      const pageChunks = chunkPages(pages);
+      const contents = pageChunks.map((c) => c.content);
       const vectors = embeddingsEnabled()
-        ? await embedTexts(chunks, "document")
-        : chunks.map(() => null);
+        ? await embedTexts(contents, "document")
+        : contents.map(() => null);
 
       const [doc] = await sdb.createKnowledgeDocument({
         clientId,
@@ -160,30 +226,35 @@ export async function POST(request: NextRequest) {
         source: blobUrl,
       });
       await sdb.insertKnowledgeChunks(
-        chunks.map((content, i) => ({
+        pageChunks.map((c, i) => ({
           orgId: ctx.orgId,
           clientId,
           documentId: doc.id,
-          content,
+          content: c.content,
           embedding: vectors[i] ?? null,
-          metadata: { chunkIndex: i },
+          metadata: { chunkIndex: c.chunkIndex, pageNumber: c.pageNumber },
         }))
       );
-      await sdb.finishUpload(audit.id, {
-        status: "completed",
-        rowsIngested: chunks.length,
-      });
+      if (audit) {
+        await sdb.finishUpload(audit.id, {
+          status: "completed",
+          rowsIngested: pageChunks.length,
+        });
+      }
       return NextResponse.json({
         ok: true,
         type: "knowledge",
         documentId: doc.id,
-        chunks: chunks.length,
+        chunks: pageChunks.length,
+        pages: pages.length,
         embedded: embeddingsEnabled(),
         blobUrl,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "ingest failed";
-      await sdb.finishUpload(audit.id, { status: "failed", error: message });
+      if (audit) {
+        await sdb.finishUpload(audit.id, { status: "failed", error: message });
+      }
       return NextResponse.json({ error: message }, { status: 422 });
     }
   }

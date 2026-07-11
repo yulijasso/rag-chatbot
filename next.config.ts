@@ -22,6 +22,8 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BASE_PATH: basePath,
   },
   cacheComponents: true,
+  // Native/WASM deps used by the PDF render route — don't bundle them.
+  serverExternalPackages: ["sharp", "@hyzyla/pdfium"],
   devIndicators: false,
   poweredByHeader: false,
   reactCompiler: true,

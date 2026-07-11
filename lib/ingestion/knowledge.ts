@@ -60,6 +60,53 @@ export async function extractText(
   return new TextDecoder().decode(buffer);
 }
 
+export type Page = { pageNumber: number; text: string };
+
+/**
+ * Extract a document page-by-page. PDFs yield one entry per page (via unpdf's
+ * `mergePages: false`); formats without page structure (DOCX, text) yield a
+ * single logical page. Page numbers let chunks carry citations (e.g. "p. 214").
+ */
+export async function extractPages(
+  buffer: ArrayBuffer,
+  type: DocFileType
+): Promise<Page[]> {
+  if (type === "pdf") {
+    const { extractText: extract, getDocumentProxy } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(buffer));
+    // With mergePages: false, `text` is an array of per-page strings.
+    const { text } = await extract(pdf, { mergePages: false });
+    const pages = Array.isArray(text) ? text : [text];
+    return pages.map((t, i) => ({ pageNumber: i + 1, text: t ?? "" }));
+  }
+  // DOCX / text have no reliable page boundaries — treat as one page.
+  return [{ pageNumber: 1, text: await extractText(buffer, type) }];
+}
+
+export type PageChunk = {
+  content: string;
+  pageNumber: number;
+  chunkIndex: number;
+};
+
+/**
+ * Chunk a document page-by-page so chunks never cross page boundaries and each
+ * carries its page number. `chunkIndex` is document-global (stable ordering).
+ */
+export function chunkPages(
+  pages: Page[],
+  opts?: { maxChars?: number; overlap?: number }
+): PageChunk[] {
+  const out: PageChunk[] = [];
+  let chunkIndex = 0;
+  for (const page of pages) {
+    for (const content of chunkText(page.text, opts)) {
+      out.push({ content, pageNumber: page.pageNumber, chunkIndex: chunkIndex++ });
+    }
+  }
+  return out;
+}
+
 /**
  * Split text into overlapping chunks on paragraph/sentence boundaries.
  * ~1000 chars per chunk with ~150 char overlap keeps related context together

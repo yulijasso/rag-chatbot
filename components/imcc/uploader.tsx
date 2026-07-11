@@ -1,157 +1,189 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
+import { UploadCloud } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-type ClientOption = { id: string; name: string };
+type Result = { ok: true; type: "queued" } | { error: string };
 
-type Result =
-  | { ok: true; type: "metrics"; parsedRows: number; ingestedRows: number }
-  | { ok: true; type: "knowledge"; chunks: number; embedded: boolean }
-  | { error: string };
-
-const PLATFORMS = [
-  { value: "seller_center", label: "Seller Center (sales)" },
-  { value: "ads_manager", label: "Ads Manager (ads)" },
-  { value: "affiliate_center", label: "Affiliate Center" },
-  { value: "business_suite", label: "Business Suite (engagement)" },
-  { value: "other", label: "Other" },
-];
-
-const KINDS = [
-  { value: "brief", label: "Client brief" },
-  { value: "strategy_note", label: "Strategy note" },
-  { value: "campaign_writeup", label: "Campaign write-up" },
-  { value: "best_practice", label: "Best practice" },
-];
-
-const selectClass =
-  "h-9 rounded-md border border-input bg-background px-2 text-sm";
-
-/** Upload a CSV (→ metrics) or PDF/DOCX (→ knowledge) for a client. */
-export function Uploader({ clients }: { clients: ClientOption[] }) {
+/** Generic document uploader — queues a file for the RAG knowledge base. */
+export function Uploader({ onUploaded }: { onUploaded?: () => void }) {
   const router = useRouter();
-  const [clientId, setClientId] = useState(clients[0]?.id ?? "");
-  const [platform, setPlatform] = useState("seller_center");
-  const [kind, setKind] = useState("strategy_note");
+  const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "uploading" | "processing">(
+    "idle"
+  );
+  const [progress, setProgress] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
 
-  const isCsv = useMemo(
-    () => (file ? file.name.toLowerCase().endsWith(".csv") : true),
-    [file]
-  );
+  const busy = phase !== "idle";
+
+  const ACCEPTED = [".pdf", ".docx", ".txt", ".md"];
+
+  function acceptFile(candidate: File | null) {
+    if (!candidate) {
+      return;
+    }
+    const ok = ACCEPTED.some((ext) =>
+      candidate.name.toLowerCase().endsWith(ext)
+    );
+    if (!ok) {
+      setResult({ error: `Unsupported file type. Use ${ACCEPTED.join(", ")}.` });
+      return;
+    }
+    setResult(null);
+    setFile(candidate);
+  }
+
+  function onDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setDragging(false);
+    acceptFile(e.dataTransfer.files?.[0] ?? null);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!(file && clientId)) {
+    if (!file) {
       return;
     }
-    setBusy(true);
+    const MAX_MB = 100;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setResult({
+        error: `"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)}MB — over the ${MAX_MB}MB limit.`,
+      });
+      return;
+    }
     setResult(null);
     try {
-      const body = new FormData();
-      body.set("file", file);
-      body.set("clientId", clientId);
-      body.set("platform", platform);
-      body.set("kind", kind);
-      const res = await fetch("/api/ingest", { method: "POST", body });
-      const json = (await res.json()) as Result;
+      // 1) Upload the file straight to Vercel Blob — no server body-size cap.
+      setPhase("uploading");
+      setProgress(0);
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/blob/upload",
+        multipart: true,
+        onUploadProgress: (e) => setProgress(e.percentage),
+      });
+
+      // 2) Ask the server to extract + embed it from the blob URL.
+      setPhase("processing");
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url, filename: file.name }),
+      });
+      const json = (await res.json().catch(() => null)) as Result | null;
+      if (!json) {
+        setResult({ error: `Upload failed (${res.status} ${res.statusText}).` });
+        return;
+      }
       setResult(json);
       if ("ok" in json) {
+        setFile(null);
+        if (inputRef.current) {
+          inputRef.current.value = "";
+        }
+        onUploaded?.();
         router.refresh();
       }
     } catch (err) {
       setResult({ error: err instanceof Error ? err.message : "Upload failed" });
     } finally {
-      setBusy(false);
+      setPhase("idle");
     }
-  }
-
-  if (clients.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        Add a client first, then upload data for it.
-      </p>
-    );
   }
 
   return (
     <form className="flex flex-col gap-3" onSubmit={submit}>
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Client"
-          className={selectClass}
-          onChange={(e) => setClientId(e.target.value)}
-          value={clientId}
+      {/** biome-ignore lint/a11y/noStaticElementInteractions: label wraps a real file input for keyboard/AT access; drag handlers are a mouse-only enhancement */}
+      <label
+        className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center transition-colors ${
+          dragging
+            ? "border-primary bg-primary/5"
+            : "border-border/60 bg-background/50 hover:bg-muted/40"
+        }`}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setDragging(false);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDrop={onDrop}
+      >
+        <div
+          className={`grid size-11 place-items-center rounded-full transition-colors ${
+            dragging || file
+              ? "bg-primary/15 text-primary"
+              : "bg-muted text-muted-foreground"
+          }`}
         >
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-
-        {isCsv ? (
-          <select
-            aria-label="Platform"
-            className={selectClass}
-            onChange={(e) => setPlatform(e.target.value)}
-            value={platform}
-          >
-            {PLATFORMS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <select
-            aria-label="Document kind"
-            className={selectClass}
-            onChange={(e) => setKind(e.target.value)}
-            value={kind}
-          >
-            {KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
-              </option>
-            ))}
-          </select>
-        )}
-
+          <UploadCloud className="size-5" />
+        </div>
+        <span className="text-sm">
+          {file ? (
+            <span className="font-medium">{file.name}</span>
+          ) : (
+            <>
+              <span className="font-medium text-foreground">Choose a file</span>{" "}
+              or drop it here
+            </>
+          )}
+        </span>
+        <span className="text-muted-foreground text-xs">
+          PDF, DOCX, TXT, or MD · up to 100MB
+        </span>
         <input
-          accept=".csv,.pdf,.docx,.txt,.md"
-          className="text-sm"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          accept=".pdf,.docx,.txt,.md"
+          className="sr-only"
+          onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
+          ref={inputRef}
           type="file"
         />
+      </label>
 
+      <div className="flex items-center gap-3">
         <Button disabled={busy || !file} type="submit">
-          {busy ? "Uploading…" : "Upload"}
+          {phase === "uploading"
+            ? "Uploading…"
+            : phase === "processing"
+              ? "Processing…"
+              : "Upload"}
         </Button>
+        {result && !busy ? (
+          "error" in result ? (
+            <span className="text-red-500 text-sm">{result.error}</span>
+          ) : (
+            <span className="text-green-600 text-sm dark:text-green-400">
+              Queued — embedding in the background.
+            </span>
+          )
+        ) : null}
       </div>
 
-      <p className="text-muted-foreground text-xs">
-        CSV → performance metrics · PDF/DOCX/TXT → knowledge for the assistant
-      </p>
-
-      {result ? (
-        "error" in result ? (
-          <p className="text-red-500 text-sm">Error: {result.error}</p>
-        ) : result.type === "metrics" ? (
-          <p className="text-green-600 text-sm">
-            Ingested {result.ingestedRows} metric rows (of {result.parsedRows}{" "}
-            parsed).
-          </p>
-        ) : (
-          <p className="text-green-600 text-sm">
-            Stored {result.chunks} chunks
-            {result.embedded ? " (embedded)" : " (embedding pending — add VOYAGE_API_KEY)"}.
-          </p>
-        )
+      {busy ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full bg-primary transition-all duration-200 ${
+                phase === "processing" ? "animate-pulse" : ""
+              }`}
+              style={{
+                width: phase === "uploading" ? `${Math.max(progress, 2)}%` : "100%",
+              }}
+            />
+          </div>
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {phase === "uploading"
+              ? `Uploading ${Math.round(progress)}%`
+              : "Processing…"}
+          </span>
+        </div>
       ) : null}
     </form>
   );

@@ -4,6 +4,7 @@ import type { ArtifactKind } from "@/components/chat/artifact";
 import type { createDocument } from "./ai/tools/create-document";
 import type { getWeather } from "./ai/tools/get-weather";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
+import type { searchKnowledge } from "./ai/tools/search-knowledge";
 import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";
 
@@ -19,12 +20,14 @@ type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
 type requestSuggestionsTool = InferUITool<
   ReturnType<typeof requestSuggestions>
 >;
+type searchKnowledgeTool = InferUITool<ReturnType<typeof searchKnowledge>>;
 
 export type ChatTools = {
   getWeather: weatherTool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;
+  searchKnowledge: searchKnowledgeTool;
 };
 
 export type CustomUIDataTypes = {

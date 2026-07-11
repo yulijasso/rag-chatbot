@@ -20,8 +20,66 @@ type VoyageResponse = {
   data: { embedding: number[]; index: number }[];
 };
 
+// Sized for standard (paid) Voyage rate limits: larger batches run a few at a
+// time for throughput. The 429 handler still honors Retry-After, so this also
+// self-throttles gracefully if limits are ever hit.
+const BATCH_SIZE = 128;
+const CONCURRENCY = 4;
+const MAX_RETRIES = 6;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Embed one batch (<= BATCH_SIZE texts) with retry/backoff on 429/5xx. */
+async function embedBatch(
+  texts: string[],
+  inputType: "document" | "query",
+  apiKey: string
+): Promise<(number[] | null)[]> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch("https://api.voyageai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        input: texts,
+        model: EMBEDDING_MODEL,
+        input_type: inputType,
+      }),
+    });
+
+    if (res.ok) {
+      const json = (await res.json()) as VoyageResponse;
+      const ordered = new Array<number[] | null>(texts.length).fill(null);
+      for (const item of json.data) {
+        ordered[item.index] = item.embedding;
+      }
+      return ordered;
+    }
+
+    // Retry transient failures (rate limit / server). Prefer the server's
+    // Retry-After hint (seconds); fall back to exponential backoff.
+    const retryable = res.status === 429 || res.status >= 500;
+    if (retryable && attempt < MAX_RETRIES) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+        ? retryAfter * 1000
+        : 2 ** attempt * 1000 + Math.random() * 500;
+      await sleep(backoff);
+      continue;
+    }
+
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`Voyage embeddings failed (${res.status}): ${detail}`);
+  }
+}
+
 /**
- * Embed a batch of texts.
+ * Embed any number of texts. Splits into batches (Voyage per-request limits)
+ * and runs a few batches concurrently, so large documents (whole textbooks)
+ * embed reliably instead of overflowing a single request. Order preserved.
+ *
  * @param inputType "document" when embedding stored content, "query" at search
  * time — Voyage uses this to asymmetrically optimize retrieval.
  * @returns one vector per input, or `null` per input when embeddings are off.
@@ -38,31 +96,30 @@ export async function embedTexts(
     return texts.map(() => null);
   }
 
-  const res = await fetch("https://api.voyageai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      input: texts,
-      model: EMBEDDING_MODEL,
-      input_type: inputType,
-    }),
-  });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`Voyage embeddings failed (${res.status}): ${detail}`);
+  // Slice into ordered batches.
+  const batches: { start: number; texts: string[] }[] = [];
+  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    batches.push({ start: i, texts: texts.slice(i, i + BATCH_SIZE) });
   }
 
-  const json = (await res.json()) as VoyageResponse;
-  // Preserve input order (Voyage returns an `index` per item).
-  const ordered = new Array<number[] | null>(texts.length).fill(null);
-  for (const item of json.data) {
-    ordered[item.index] = item.embedding;
+  const results = new Array<number[] | null>(texts.length).fill(null);
+
+  // Simple concurrency pool: workers pull the next batch until none remain.
+  let cursor = 0;
+  async function worker() {
+    while (cursor < batches.length) {
+      const batch = batches[cursor++];
+      const vectors = await embedBatch(batch.texts, inputType, apiKey as string);
+      for (let j = 0; j < vectors.length; j++) {
+        results[batch.start + j] = vectors[j];
+      }
+    }
   }
-  return ordered;
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, batches.length) }, worker)
+  );
+
+  return results;
 }
 
 /** Embed a single query string for similarity search. */

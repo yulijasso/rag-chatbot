@@ -12,6 +12,7 @@ import {
   ToolInput,
   ToolOutput,
 } from "../ai-elements/tool";
+import { MessageSources, type SearchResult } from "../imcc/message-sources";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
@@ -95,6 +96,10 @@ const PurePreviewMessage = ({
     { text: "", isStreaming: false, rendered: false }
   ) ?? { text: "", isStreaming: false, rendered: false };
 
+  // Collected across all searchKnowledge tool calls and rendered once, at the
+  // bottom of the message (after the answer), rather than inline.
+  const searchResults: SearchResult[] = [];
+
   const parts = message.parts?.map((part, index) => {
     const { type } = part;
     const key = `message-${message.id}-part-${index}`;
@@ -126,6 +131,17 @@ const PurePreviewMessage = ({
           <MessageResponse>{sanitizeText(part.text)}</MessageResponse>
         </MessageContent>
       );
+    }
+
+    if (type === "tool-searchKnowledge") {
+      // Don't render inline — collect and show as a footer below the answer.
+      if (part.state === "output-available") {
+        const output = part.output;
+        if (output && !("error" in output)) {
+          searchResults.push(...output.results);
+        }
+      }
+      return null;
     }
 
     if (type === "tool-getWeather") {
@@ -315,6 +331,11 @@ const PurePreviewMessage = ({
     />
   );
 
+  const sources =
+    searchResults.length > 0 ? (
+      <MessageSources key={`sources-${message.id}`} results={searchResults} />
+    ) : null;
+
   const content = isThinking ? (
     <div className="flex h-[calc(13px*1.65)] items-center text-[13px] leading-[1.65]">
       <Shimmer className="font-medium" duration={1}>
@@ -325,6 +346,7 @@ const PurePreviewMessage = ({
     <>
       {attachments}
       {parts}
+      {sources}
       {actions}
     </>
   );

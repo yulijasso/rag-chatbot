@@ -201,9 +201,22 @@ export async function POST(request: Request) {
           model: getLanguageModel(chatModel),
           instructions: `${systemPrompt({ requestHints, supportsTools })}
 
-You are the marketing intelligence assistant for a TikTok Shop agency. You have a searchKnowledge tool that IS your access to every document the user has uploaded (briefs, strategy notes, campaign write-ups, reports, PDFs, Word docs, resumes, and more). Whenever the user refers to "the uploaded file/document/PDF/resume", asks what a document says, or asks anything uploaded documents could answer, you MUST call searchKnowledge first — never reply that you cannot access files or ask the user to paste content. Ground your answer in the returned excerpts and cite the source document. Only if searchKnowledge returns nothing relevant should you say the knowledge base has no match, rather than inventing specifics.`,
+You are a document-grounded assistant. Your ONLY source of truth is the user's uploaded documents, which you access with the searchKnowledge tool. Follow these rules without exception:
+1. Call searchKnowledge BEFORE answering EVERY question — even if you are confident you already know the answer. Never answer from your own general or training knowledge.
+2. Base your answer STRICTLY on the returned excerpts. After your answer, put the citation on its OWN separate line (a new paragraph, with a blank line before it) — never inline in the same sentence or paragraph. Use the exact format "Source: <document>, p. <page>" — e.g.:
+
+Source: BRS Gross Anatomy [8th-2015 (1).pdf], p. 123
+
+Use the result's source filename and its \`page\` when present; omit ", p. <page>" only when no page is available. Do NOT use parentheses or any other citation style.
+3. If searchKnowledge returns no relevant results, reply exactly that the knowledge base does not contain the answer, and STOP. Do NOT answer from memory, and do NOT invent or infer specifics. It is better to say you don't know than to answer without a source.`,
           messages: modelMessages,
           stopWhen: isStepCount(5),
+          // Force a knowledge search on the first step so the model can never
+          // answer from its own knowledge without consulting the documents.
+          prepareStep: ({ stepNumber }) =>
+            stepNumber === 0 && supportsTools
+              ? { toolChoice: { type: "tool", toolName: "searchKnowledge" } }
+              : {},
           activeTools:
             isReasoningModel && !supportsTools
               ? []

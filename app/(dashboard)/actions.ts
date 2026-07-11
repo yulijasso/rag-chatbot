@@ -19,3 +19,21 @@ export async function createClientAction(formData: FormData) {
   revalidatePath("/dashboard");
   return { ok: true };
 }
+
+/** Delete a knowledge document (cascades to its embedded chunks). */
+export async function deleteKnowledgeDocumentAction(documentId: string) {
+  if (!documentId) {
+    return { error: "documentId is required" };
+  }
+
+  const ctx = await requireOrgContext();
+  const [deleted] = await scopedDb(ctx.orgId).deleteKnowledgeDocument(
+    documentId
+  );
+  if (!deleted) {
+    return { error: "Document not found" };
+  }
+
+  revalidatePath("/dashboard");
+  return { ok: true };
+}

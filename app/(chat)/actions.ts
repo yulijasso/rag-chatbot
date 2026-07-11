@@ -11,6 +11,7 @@ import {
   deleteMessagesByChatIdAfterTimestamp,
   getChatById,
   getMessageById,
+  updateChatTitleById,
   updateChatVisibilityById,
 } from "@/lib/db/queries";
 import { getTextFromMessage } from "@/lib/utils";
@@ -79,4 +80,29 @@ export async function updateChatVisibility({
   }
 
   await updateChatVisibilityById({ chatId, visibility });
+}
+
+export async function renameChat({
+  chatId,
+  title,
+}: {
+  chatId: string;
+  title: string;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new Error("Title is required");
+  }
+
+  const chat = await getChatById({ id: chatId });
+  if (!chat || chat.userId !== session.user.id) {
+    throw new Error("Unauthorized");
+  }
+
+  await updateChatTitleById({ chatId, title: trimmed.slice(0, 255) });
 }

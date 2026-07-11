@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import Link from "next/link";
 import { memo } from "react";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
@@ -30,11 +31,13 @@ const PureChatItem = ({
   chat,
   isActive,
   onDelete,
+  onRename,
   setOpenMobile,
 }: {
   chat: Chat;
   isActive: boolean;
   onDelete: (chatId: string) => void;
+  onRename: (chatId: string, title: string) => void;
   setOpenMobile: (open: boolean) => void;
 }) => {
   const { visibilityType, setVisibilityType } = useChatVisibility({
@@ -104,6 +107,14 @@ const PureChatItem = ({
           </DropdownMenuSub>
 
           <DropdownMenuItem
+            className="cursor-pointer"
+            onSelect={() => onRename(chat.id, chat.title)}
+          >
+            <Pencil className="size-4" />
+            <span>Rename</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
             onSelect={() => onDelete(chat.id)}
             variant="destructive"
           >
@@ -118,6 +129,10 @@ const PureChatItem = ({
 
 export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
   if (prevProps.isActive !== nextProps.isActive) {
+    return false;
+  }
+  // Re-render when the title changes (e.g. after a rename).
+  if (prevProps.chat.title !== nextProps.chat.title) {
     return false;
   }
   return true;

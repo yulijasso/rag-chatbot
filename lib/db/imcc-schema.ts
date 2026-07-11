@@ -245,10 +245,20 @@ export const knowledgeDocument = pgTable(
       .notNull()
       .default("strategy_note"),
     source: text("source"),
+    // Async ingestion lifecycle. "queued" → cron extracts + inserts chunks →
+    // "embedding" → cron embeds null chunks in batches → "completed"/"failed".
+    // Defaults to "completed" so synchronously-created rows stay valid.
+    status: varchar("status", {
+      enum: ["queued", "embedding", "completed", "failed"],
+    })
+      .notNull()
+      .default("completed"),
+    error: text("error"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
   },
   (table) => ({
     orgIdx: index("KnowledgeDocument_org_idx").on(table.orgId),
+    statusIdx: index("KnowledgeDocument_status_idx").on(table.status),
   })
 );
 export type KnowledgeDocument = InferSelectModel<typeof knowledgeDocument>;

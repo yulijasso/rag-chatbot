@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { signOut, useSession } from "next-auth/react";
@@ -77,13 +77,31 @@ export function SidebarUserNav({ user }: { user: User }) {
             side="top"
           >
             <DropdownMenuItem
-              className="cursor-pointer text-[13px]"
+              className="flex cursor-pointer items-center gap-2 text-[13px]"
               data-testid="user-nav-item-theme"
-              onSelect={() =>
-                setTheme(resolvedTheme === "dark" ? "light" : "dark")
-              }
+              onSelect={(event) => {
+                // Keep the menu open so the icon animation is visible.
+                event.preventDefault();
+                setTheme(resolvedTheme === "dark" ? "light" : "dark");
+              }}
             >
-              {`Toggle ${resolvedTheme === "light" ? "dark" : "light"} mode`}
+              <span className="relative flex size-4 items-center justify-center">
+                <Sun
+                  className={`absolute size-4 transition-all duration-300 ${
+                    resolvedTheme === "dark"
+                      ? "rotate-0 scale-100 opacity-100"
+                      : "-rotate-90 scale-0 opacity-0"
+                  }`}
+                />
+                <Moon
+                  className={`absolute size-4 transition-all duration-300 ${
+                    resolvedTheme === "dark"
+                      ? "rotate-90 scale-0 opacity-0"
+                      : "rotate-0 scale-100 opacity-100"
+                  }`}
+                />
+              </span>
+              {`${resolvedTheme === "dark" ? "Light" : "Dark"} mode`}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild data-testid="user-nav-item-auth">

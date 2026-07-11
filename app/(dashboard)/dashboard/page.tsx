@@ -1,44 +1,60 @@
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
-import { CreateClientForm } from "@/components/imcc/create-client-form";
-import { Uploader } from "@/components/imcc/uploader";
+import {
+  type DocProgress,
+  KnowledgeBase,
+} from "@/components/imcc/knowledge-base";
 import { getOrgContext } from "@/lib/auth/org";
 import { scopedDb } from "@/lib/db/scoped";
 
 /**
- * Unified Marketing Dashboard — agency roll-up.
+ * Knowledge base — upload documents that ground the chatbot's answers.
  *
- * The auth/DB-dependent content is dynamic (reads cookies), so it lives inside
- * a <Suspense> boundary as required by Next.js Cache Components. All data is
- * read through scopedDb(orgId); the org is bootstrapped for the signed-in user
- * on first visit (no seed data).
+ * Auth/DB-dependent content reads cookies, so it lives inside a <Suspense>
+ * boundary as required by Next.js Cache Components. Ingestion runs in the
+ * background (see /api/cron/embed); the client shell shows live progress.
  */
 export default function DashboardPage() {
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-8 p-8">
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 p-6 md:p-10">
       <header>
-        <h1 className="font-semibold text-2xl">Command Center</h1>
+        <div className="flex items-center gap-3 text-muted-foreground text-sm">
+          <Link
+            className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+            href="/"
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to chat
+          </Link>
+          <span>·</span>
+          <Link className="transition-colors hover:text-foreground" href="/feedback">
+            Feedback
+          </Link>
+        </div>
+        <h1 className="mt-3 font-semibold text-2xl tracking-tight">
+          Knowledge base
+        </h1>
         <p className="mt-1 text-muted-foreground text-sm">
-          Agency roll-up. Create client workspaces and upload their data.
+          Upload documents to ground the assistant's answers.
         </p>
       </header>
-      <Suspense
-        fallback={<p className="text-muted-foreground text-sm">Loading…</p>}
-      >
-        <DashboardContent />
+
+      <Suspense fallback={<Skeleton />}>
+        <Content />
       </Suspense>
     </main>
   );
 }
 
-async function DashboardContent() {
+async function Content() {
   const ctx = await getOrgContext();
 
   if (!ctx) {
     return (
       <p className="text-muted-foreground text-sm">
         Please{" "}
-        <Link className="underline" href="/login">
+        <Link className="underline underline-offset-4" href="/login">
           sign in
         </Link>{" "}
         to continue.
@@ -46,76 +62,25 @@ async function DashboardContent() {
     );
   }
 
-  const sdb = scopedDb(ctx.orgId);
-  const [clients, uploads] = await Promise.all([
-    sdb.listClients(),
-    sdb.listUploads(),
-  ]);
-  const clientName = new Map(clients.map((c) => [c.id, c.name]));
+  const rows = await scopedDb(ctx.orgId).listDocumentsWithProgress();
+  const initialDocs: DocProgress[] = rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    status: r.status,
+    error: r.error,
+    createdAt: r.createdAt.toISOString(),
+    total: r.total,
+    embedded: r.embedded,
+  }));
 
+  return <KnowledgeBase initialDocs={initialDocs} />;
+}
+
+function Skeleton() {
   return (
-    <>
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium text-lg">Clients</h2>
-        <CreateClientForm />
-        {clients.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No clients yet. Add one above to get started.
-          </p>
-        ) : (
-          <ul className="flex flex-wrap gap-2">
-            {clients.map((c) => (
-              <li key={c.id}>
-                <Link
-                  className="inline-block rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
-                  href={`/clients/${c.id}`}
-                >
-                  {c.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium text-lg">Upload data</h2>
-        <Uploader clients={clients.map((c) => ({ id: c.id, name: c.name }))} />
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium text-lg">Recent uploads</h2>
-        {uploads.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No uploads yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="py-1 pr-4 font-medium">File</th>
-                  <th className="py-1 pr-4 font-medium">Client</th>
-                  <th className="py-1 pr-4 font-medium">Platform</th>
-                  <th className="py-1 pr-4 font-medium">Status</th>
-                  <th className="py-1 pr-4 font-medium">Rows</th>
-                </tr>
-              </thead>
-              <tbody>
-                {uploads.map((u) => (
-                  <tr className="border-t" key={u.id}>
-                    <td className="py-1 pr-4">{u.filename}</td>
-                    <td className="py-1 pr-4">
-                      {clientName.get(u.clientId) ?? "—"}
-                    </td>
-                    <td className="py-1 pr-4">{u.platform}</td>
-                    <td className="py-1 pr-4">{u.status}</td>
-                    <td className="py-1 pr-4">{u.rowsIngested}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </>
+    <div className="flex flex-col gap-8">
+      <div className="h-40 animate-pulse rounded-xl border border-border/60 border-dashed" />
+      <div className="h-24 animate-pulse rounded-xl border border-border/60" />
+    </div>
   );
 }

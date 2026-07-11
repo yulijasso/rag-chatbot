@@ -29,7 +29,8 @@ export function searchKnowledge({
       "document/PDF/resume', asks what a document says, or asks anything that " +
       "uploaded documents could answer — do NOT reply that you cannot access " +
       "files, because this tool IS your access to them. Ground your answer in " +
-      "the returned excerpts and cite the source document.",
+      "the returned excerpts and cite the source document and page number " +
+      "(e.g. \"Source.pdf, p. 214\") when a `page` is present.",
     inputSchema: z.object({
       query: z
         .string()
@@ -66,6 +67,9 @@ export function searchKnowledge({
       return {
         results: results.map((r) => ({
           source: r.title,
+          documentId: r.documentId,
+          chunkId: r.chunkId,
+          page: r.page ?? undefined,
           excerpt: r.content,
           score: Number(r.score.toFixed(3)),
         })),

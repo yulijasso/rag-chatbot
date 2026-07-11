@@ -151,11 +151,37 @@ export function scopedDb(orgId: string) {
       title: string;
       kind?: "brief" | "strategy_note" | "campaign_writeup" | "best_practice";
       source?: string | null;
+      status?: "queued" | "embedding" | "completed" | "failed";
     }) {
       return db
         .insert(knowledgeDocument)
         .values({ ...values, orgId })
         .returning();
+    },
+
+    /**
+     * List documents with embedding progress (total vs embedded chunk counts)
+     * for the dashboard. `count(embedding)` counts only non-null embeddings.
+     */
+    listDocumentsWithProgress() {
+      return db
+        .select({
+          id: knowledgeDocument.id,
+          title: knowledgeDocument.title,
+          status: knowledgeDocument.status,
+          error: knowledgeDocument.error,
+          createdAt: knowledgeDocument.createdAt,
+          total: sql<number>`count(${knowledgeChunk.id})::int`,
+          embedded: sql<number>`count(${knowledgeChunk.embedding})::int`,
+        })
+        .from(knowledgeDocument)
+        .leftJoin(
+          knowledgeChunk,
+          eq(knowledgeChunk.documentId, knowledgeDocument.id)
+        )
+        .where(eq(knowledgeDocument.orgId, orgId))
+        .groupBy(knowledgeDocument.id)
+        .orderBy(desc(knowledgeDocument.createdAt));
     },
 
     insertKnowledgeChunks(
@@ -195,8 +221,11 @@ export function scopedDb(orgId: string) {
 
       const rows = await db
         .select({
+          chunkId: knowledgeChunk.id,
+          documentId: knowledgeChunk.documentId,
           content: knowledgeChunk.content,
           title: knowledgeDocument.title,
+          metadata: knowledgeChunk.metadata,
           distance,
         })
         .from(knowledgeChunk)
@@ -208,11 +237,17 @@ export function scopedDb(orgId: string) {
         .orderBy(distance)
         .limit(k);
 
-      return rows.map((r) => ({
-        content: r.content,
-        title: r.title,
-        score: 1 - Number(r.distance),
-      }));
+      return rows.map((r) => {
+        const page = (r.metadata as { pageNumber?: number } | null)?.pageNumber;
+        return {
+          chunkId: r.chunkId,
+          documentId: r.documentId,
+          content: r.content,
+          title: r.title,
+          page: typeof page === "number" ? page : null,
+          score: 1 - Number(r.distance),
+        };
+      });
     },
 
     listKnowledgeDocuments(clientId?: string) {
@@ -231,6 +266,22 @@ export function scopedDb(orgId: string) {
         .from(knowledgeDocument)
         .where(scope)
         .orderBy(desc(knowledgeDocument.createdAt));
+    },
+
+    /**
+     * Delete a knowledge document (and its chunks, via ON DELETE CASCADE).
+     * Scoped to this org so one tenant can never delete another's docs.
+     */
+    deleteKnowledgeDocument(documentId: string) {
+      return db
+        .delete(knowledgeDocument)
+        .where(
+          and(
+            eq(knowledgeDocument.orgId, orgId),
+            eq(knowledgeDocument.id, documentId)
+          )
+        )
+        .returning({ id: knowledgeDocument.id });
     },
 
     // --- Intelligence outputs ----------------------------------------------
