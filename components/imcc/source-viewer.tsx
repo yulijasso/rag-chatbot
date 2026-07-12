@@ -40,7 +40,6 @@ export function SourceViewer({
   const [open, setOpen] = useState(false);
   const [chunks, setChunks] = useState<Chunk[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const firstHighlightRef = useRef<HTMLDivElement>(null);
   const highlighted = useMemo(
     () => new Set(highlightChunkIds),
     [highlightChunkIds]
@@ -97,14 +96,14 @@ export function SourceViewer({
     [chunkIdsByPage]
   );
 
-  // In text mode, scroll the first highlight into view.
+  // In text mode, scroll the first highlight into view (only one dialog is open
+  // at a time, so a document query is safe).
   useEffect(() => {
     if (open && chunks && !isPdf) {
       const id = window.setTimeout(() => {
-        firstHighlightRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
+        document
+          .querySelector('[data-source-first-hit="true"]')
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 120);
       return () => window.clearTimeout(id);
     }
@@ -139,11 +138,7 @@ export function SourceViewer({
             />
           )
         ) : (
-          <TextView
-            chunks={chunks}
-            firstHighlightRef={firstHighlightRef}
-            highlighted={highlighted}
-          />
+          <TextView chunks={chunks} highlighted={highlighted} />
         )}
       </DialogContent>
     </Dialog>
@@ -153,11 +148,9 @@ export function SourceViewer({
 function TextView({
   chunks,
   highlighted,
-  firstHighlightRef,
 }: {
   chunks: Chunk[] | null;
   highlighted: Set<string>;
-  firstHighlightRef: React.RefObject<HTMLDivElement | null>;
 }) {
   let seenFirstHighlight = false;
 
@@ -185,8 +178,8 @@ function TextView({
                     ? "bg-amber-200/60 ring-1 ring-amber-400/60 dark:bg-amber-400/15 dark:ring-amber-300/30"
                     : "text-muted-foreground"
                 )}
+                data-source-first-hit={setRef ? "true" : undefined}
                 key={chunk.id}
-                ref={setRef ? firstHighlightRef : undefined}
               >
                 {chunk.pageNumber != null ? (
                   <span className="mr-2 select-none font-medium text-muted-foreground text-xs">
