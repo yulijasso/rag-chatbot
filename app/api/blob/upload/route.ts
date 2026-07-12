@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
             "application/octet-stream",
           ],
           maximumSizeInBytes: 100 * 1024 * 1024, // 100MB
+          // Give every upload a unique path so re-uploading the same filename
+          // (or two tenants uploading the same name) never collides.
+          addRandomSuffix: true,
         };
       },
       onUploadCompleted: async () => {
