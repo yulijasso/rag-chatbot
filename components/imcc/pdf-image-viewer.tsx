@@ -43,7 +43,12 @@ export function PdfImageViewer({
           `/api/documents/${documentId}/page/${page}?chunks=${chunks}`
         );
         if (!res.ok) {
-          throw new Error(`Failed to render page (${res.status})`);
+          const body = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(
+            body?.error ?? `Failed to render page (${res.status})`
+          );
         }
         const json = (await res.json()) as PageData;
         if (!cancelled) {

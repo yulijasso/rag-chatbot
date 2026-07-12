@@ -140,6 +140,8 @@ export async function GET(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "render failed";
+    // Surface the real cause in Vercel logs to diagnose serverless failures.
+    console.error("[page-render] failed:", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
