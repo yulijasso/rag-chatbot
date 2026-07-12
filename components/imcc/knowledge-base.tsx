@@ -1,8 +1,9 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { Eye, FileText } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DeleteDocumentButton } from "@/components/imcc/delete-document-button";
+import { SourceViewer } from "@/components/imcc/source-viewer";
 import { Uploader } from "@/components/imcc/uploader";
 
 export type DocProgress = {
@@ -72,8 +73,19 @@ export function KnowledgeBase({ initialDocs }: { initialDocs: DocProgress[] }) {
     };
   }, [pending, refresh]);
 
+  const totalChunks = docs.reduce((n, d) => n + d.total, 0);
+  const readyCount = docs.filter((d) => d.status === "completed").length;
+
   return (
     <div className="flex flex-col gap-8">
+      {docs.length > 0 ? (
+        <section className="grid grid-cols-3 gap-3">
+          <Stat label="Documents" value={docs.length} />
+          <Stat label="Chunks" value={totalChunks} />
+          <Stat label="Ready" value={readyCount} />
+        </section>
+      ) : null}
+
       <Uploader onUploaded={refresh} />
 
       <section className="flex flex-col gap-3">
@@ -133,6 +145,20 @@ function DocumentRow({
           </p>
         </div>
         <StatusBadge doc={doc} pct={pct} />
+        <SourceViewer
+          documentId={doc.id}
+          highlightChunkIds={[]}
+          title={doc.title}
+        >
+          <button
+            aria-label={`View ${doc.title}`}
+            className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="View"
+            type="button"
+          >
+            <Eye className="size-4" />
+          </button>
+        </SourceViewer>
         <DeleteDocumentButton
           documentId={doc.id}
           onDeleted={onDeleted}
@@ -153,6 +179,17 @@ function DocumentRow({
         <p className="text-red-500 text-xs">{doc.error}</p>
       ) : null}
     </li>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-border/60 bg-card p-4 shadow-[var(--shadow-card)]">
+      <span className="font-semibold text-2xl tabular-nums tracking-tight">
+        {value.toLocaleString()}
+      </span>
+      <span className="text-muted-foreground text-xs">{label}</span>
+    </div>
   );
 }
 

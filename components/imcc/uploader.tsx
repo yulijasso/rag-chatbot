@@ -1,7 +1,7 @@
 "use client";
 
 import { upload } from "@vercel/blob/client";
-import { UploadCloud } from "lucide-react";
+import { Check, UploadCloud } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -159,8 +159,9 @@ export function Uploader({ onUploaded }: { onUploaded?: () => void }) {
           "error" in result ? (
             <span className="text-red-500 text-sm">{result.error}</span>
           ) : (
-            <span className="text-green-600 text-sm dark:text-green-400">
-              Queued — embedding in the background.
+            <span className="inline-flex items-center gap-1 text-green-600 text-sm dark:text-green-400">
+              <Check className="size-3.5" />
+              Queued
             </span>
           )
         ) : null}

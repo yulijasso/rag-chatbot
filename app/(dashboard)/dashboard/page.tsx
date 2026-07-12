@@ -17,7 +17,7 @@ import { scopedDb } from "@/lib/db/scoped";
  */
 export default function DashboardPage() {
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 p-6 md:p-10">
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 p-6 md:p-10">
       <header>
         <div className="flex items-center gap-3 text-muted-foreground text-sm">
           <Link

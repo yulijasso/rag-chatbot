@@ -99,10 +99,17 @@ const PurePreviewMessage = ({
   // Collected across all searchKnowledge tool calls and rendered once, at the
   // bottom of the message (after the answer), rather than inline.
   const searchResults: SearchResult[] = [];
+  // The assistant's answer text, so we can show only the sources it actually
+  // cited (via its "Source: <file>" lines) — not every retrieved passage.
+  let answerText = "";
 
   const parts = message.parts?.map((part, index) => {
     const { type } = part;
     const key = `message-${message.id}-part-${index}`;
+
+    if (type === "text" && part.text) {
+      answerText += ` ${part.text}`;
+    }
 
     if (type === "reasoning") {
       if (!mergedReasoning.rendered && mergedReasoning.text) {
@@ -333,7 +340,11 @@ const PurePreviewMessage = ({
 
   const sources =
     searchResults.length > 0 ? (
-      <MessageSources key={`sources-${message.id}`} results={searchResults} />
+      <MessageSources
+        answerText={answerText}
+        key={`sources-${message.id}`}
+        results={searchResults}
+      />
     ) : null;
 
   const content = isThinking ? (

@@ -17,10 +17,29 @@ export type SearchResult = {
  * compact "Sources" list. Clicking a source opens the document with the used
  * passages highlighted.
  */
-export function MessageSources({ results }: { results: SearchResult[] }) {
+export function MessageSources({
+  results,
+  answerText,
+}: {
+  results: SearchResult[];
+  answerText?: string;
+}) {
   // Older messages (from before this feature) have no documentId/chunkId — skip
   // them so we never render an un-openable source or fetch an invalid id.
-  const usable = (results ?? []).filter((r) => r.documentId && r.chunkId);
+  let usable = (results ?? []).filter((r) => r.documentId && r.chunkId);
+
+  // Show ONLY the sources the assistant actually cited in its answer (it writes
+  // "Source: <filename>"). If it cited nothing — e.g. it refused because the
+  // answer isn't in the knowledge base — show no sources at all.
+  if (answerText) {
+    const hay = answerText.toLowerCase();
+    usable = usable.filter((r) => {
+      const title = r.source.toLowerCase();
+      const noExt = title.replace(/\.[a-z0-9]+$/, "");
+      return hay.includes(title) || hay.includes(noExt);
+    });
+  }
+
   if (usable.length === 0) {
     return null;
   }
@@ -46,11 +65,35 @@ export function MessageSources({ results }: { results: SearchResult[] }) {
 
   const docs = Array.from(byDoc.entries());
 
+  // Pages the model actually cited for a document in its "Source: <file>, p. N"
+  // line — so the chip matches the prose citation, not every retrieved page.
+  const citedPagesFor = (title: string): number[] | null => {
+    if (!answerText) {
+      return null;
+    }
+    const esc = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const m = answerText.match(
+      new RegExp(`${esc}[^\\n]{0,12}?p{1,2}\\.?\\s*([0-9][0-9,\\s]*)`, "i")
+    );
+    if (!m) {
+      return null;
+    }
+    const nums = m[1]
+      .split(/[^0-9]+/)
+      .map(Number)
+      .filter((n) => n > 0);
+    return nums.length > 0
+      ? Array.from(new Set(nums)).sort((a, b) => a - b)
+      : null;
+  };
+
   return (
     <div className="mt-2.5 border-border/40 border-t pt-2.5">
       <div className="flex flex-wrap gap-1.5">
         {docs.map(([documentId, doc], i) => {
-          const pages = Array.from(doc.pages).sort((a, b) => a - b);
+          const pages =
+            citedPagesFor(doc.title) ??
+            Array.from(doc.pages).sort((a, b) => a - b);
           return (
             <SourceViewer
               documentId={documentId}

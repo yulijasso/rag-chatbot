@@ -1,6 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { embeddingsEnabled, embedQuery } from "@/lib/ai/embeddings";
+import {
+  embeddingsEnabled,
+  embedQuery,
+  rerankDocuments,
+} from "@/lib/ai/embeddings";
 import { scopedDb } from "@/lib/db/scoped";
 
 /**
@@ -56,16 +60,43 @@ export function searchKnowledge({
       if (!vec) {
         return { results: [] };
       }
+      const want = k ?? 6;
       const sdb = scopedDb(orgId);
-      const results = await sdb.searchKnowledge(vec, { clientId, k });
-      if (results.length === 0) {
+      // Retrieve a wider candidate set by embedding similarity, then rerank for
+      // precision so weakly-related passages don't surface as sources.
+      const candidates = await sdb.searchKnowledge(vec, {
+        clientId,
+        k: Math.max(want * 3, 15),
+      });
+      if (candidates.length === 0) {
         return {
           results: [],
           note: "No matching documents. The knowledge base may be empty or its chunks not yet embedded.",
         };
       }
+
+      // Rerank; keep only passages that clear the relevance threshold.
+      const RERANK_MIN = 0.45;
+      const ranked = await rerankDocuments(
+        query,
+        candidates.map((c) => c.content)
+      );
+      const chosen = ranked
+        ? ranked
+            .filter((r) => r.score >= RERANK_MIN)
+            .slice(0, want)
+            .map((r) => ({ ...candidates[r.index], score: r.score }))
+        : candidates.slice(0, want);
+
+      if (chosen.length === 0) {
+        return {
+          results: [],
+          note: "No sufficiently relevant passages were found in the knowledge base for this query.",
+        };
+      }
+
       return {
-        results: results.map((r) => ({
+        results: chosen.map((r) => ({
           source: r.title,
           documentId: r.documentId,
           chunkId: r.chunkId,

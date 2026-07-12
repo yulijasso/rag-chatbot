@@ -127,3 +127,43 @@ export async function embedQuery(text: string): Promise<number[] | null> {
   const [vec] = await embedTexts([text], "query");
   return vec ?? null;
 }
+
+export const RERANK_MODEL = "rerank-2.5";
+
+/**
+ * Rerank candidate passages against the query with Voyage's cross-encoder,
+ * which judges query↔passage relevance far more precisely than embedding cosine
+ * — the key to not surfacing weakly-related documents as sources. Returns
+ * {index, score} sorted by relevance, or null if reranking is unavailable
+ * (caller falls back to the embedding order).
+ */
+export async function rerankDocuments(
+  query: string,
+  documents: string[]
+): Promise<{ index: number; score: number }[] | null> {
+  const apiKey = process.env.VOYAGE_API_KEY;
+  if (!apiKey || documents.length === 0) {
+    return null;
+  }
+  try {
+    const res = await fetch("https://api.voyageai.com/v1/rerank", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model: RERANK_MODEL, query, documents }),
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const json = (await res.json()) as {
+      data: { index: number; relevance_score: number }[];
+    };
+    return json.data
+      .map((d) => ({ index: d.index, score: d.relevance_score }))
+      .sort((a, b) => b.score - a.score);
+  } catch {
+    return null;
+  }
+}

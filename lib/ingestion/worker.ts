@@ -148,30 +148,26 @@ async function embedNextChunks(): Promise<number> {
   );
 
   // Collect the successfully-embedded rows and write them in ONE bulk update
-  // (unnest) instead of a round-trip per chunk — the difference between ~14/s
-  // and hundreds/s.
-  const ids: string[] = [];
-  const vecs: string[] = [];
+  // (a VALUES join) instead of a round-trip per chunk — the difference between
+  // ~14/s and hundreds/s.
+  const rows: ReturnType<typeof sql>[] = [];
   for (let i = 0; i < pending.length; i++) {
     const vec = vectors[i];
     if (vec) {
-      ids.push(pending[i].id);
-      vecs.push(`[${vec.join(",")}]`);
+      rows.push(sql`(${pending[i].id}::uuid, ${`[${vec.join(",")}]`}::vector)`);
     }
   }
-  if (ids.length === 0) {
+  if (rows.length === 0) {
     return 0;
   }
 
   await db.execute(sql`
     update "KnowledgeChunk" as c
-    set "embedding" = data.emb::vector
-    from (
-      select unnest(${ids}::uuid[]) as id, unnest(${vecs}::text[]) as emb
-    ) as data
+    set "embedding" = data.emb
+    from (values ${sql.join(rows, sql`, `)}) as data(id, emb)
     where c."id" = data.id
   `);
-  return ids.length;
+  return rows.length;
 }
 
 /** Flip "embedding" docs to "completed" once they have chunks and none null. */
