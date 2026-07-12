@@ -14,10 +14,10 @@ docker compose up -d
 ```
 
 Postgres → `localhost:5433` (user `postgres`, password `postgres`, db `rag`)
-Redis → `localhost:6379`
+Redis → `localhost:6380`
 
-> Host port is **5433** (not 5432) so it doesn't clash with a Postgres you may
-> already run locally.
+> Host ports are **5433** (Postgres) and **6380** (Redis) so they don't clash
+> with a Postgres/Redis you may already run locally on 5432/6379.
 
 ## 2. Point the app at them
 
@@ -25,7 +25,7 @@ In `.env.local`, set:
 
 ```bash
 POSTGRES_URL="postgresql://postgres:postgres@localhost:5433/rag"
-REDIS_URL="redis://localhost:6379"
+REDIS_URL="redis://localhost:6380"
 # keep VOYAGE_API_KEY, BLOB_READ_WRITE_TOKEN, AUTH_SECRET, AI Gateway as-is
 ```
 
