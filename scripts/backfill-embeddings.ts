@@ -6,9 +6,8 @@
  *   NODE_OPTIONS='--conditions=react-server' \
  *     npx tsx --env-file=.env.local scripts/backfill-embeddings.ts
  */
-import { isNull } from "drizzle-orm";
-import { eq } from "drizzle-orm";
-import { embedTexts, embeddingsEnabled } from "@/lib/ai/embeddings";
+import { eq, isNull } from "drizzle-orm";
+import { embeddingsEnabled, embedTexts } from "@/lib/ai/embeddings";
 import { db } from "@/lib/db/client";
 import { knowledgeChunk } from "@/lib/db/imcc-schema";
 

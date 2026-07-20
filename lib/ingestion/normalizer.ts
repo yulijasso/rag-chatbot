@@ -121,7 +121,10 @@ function mapRow(
     spend: num(row, findKey(row, ["spend", "cost", "adspend", "budgetspent"])),
     roas: num(row, findKey(row, ["roas", "returnonadspend"])),
     orders: num(row, findKey(row, ["orders", "ordercount", "skuorders"])),
-    units: num(row, findKey(row, ["units", "unitssold", "quantity", "itemssold"])),
+    units: num(
+      row,
+      findKey(row, ["units", "unitssold", "quantity", "itemssold"])
+    ),
     impressions: num(row, findKey(row, ["impressions", "impr", "videoviews"])),
     clicks: num(row, findKey(row, ["clicks", "linkclicks"])),
     commission: num(row, findKey(row, ["commission", "estcommission"])),

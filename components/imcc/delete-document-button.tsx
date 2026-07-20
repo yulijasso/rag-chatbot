@@ -90,7 +90,10 @@ export function DeleteDocumentButton({
         </DialogHeader>
 
         <div className="flex flex-col gap-2">
-          <label className="text-muted-foreground text-sm" htmlFor="confirm-delete">
+          <label
+            className="text-muted-foreground text-sm"
+            htmlFor="confirm-delete"
+          >
             Type <span className="font-medium text-foreground">{title}</span> to
             confirm
           </label>

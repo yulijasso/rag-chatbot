@@ -29,9 +29,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
   return (
     <button
       aria-label={
-        mounted
-          ? `Switch to ${isDark ? "light" : "dark"} mode`
-          : "Toggle theme"
+        mounted ? `Switch to ${isDark ? "light" : "dark"} mode` : "Toggle theme"
       }
       className={cn(
         "relative inline-flex size-8 items-center justify-center rounded-lg",

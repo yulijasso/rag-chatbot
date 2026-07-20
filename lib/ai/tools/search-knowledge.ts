@@ -34,7 +34,7 @@ export function searchKnowledge({
       "uploaded documents could answer — do NOT reply that you cannot access " +
       "files, because this tool IS your access to them. Ground your answer in " +
       "the returned excerpts and cite the source document and page number " +
-      "(e.g. \"Source.pdf, p. 214\") when a `page` is present.",
+      '(e.g. "Source.pdf, p. 214") when a `page` is present.',
     inputSchema: z.object({
       query: z
         .string()
@@ -52,8 +52,7 @@ export function searchKnowledge({
     execute: async ({ query, k }) => {
       if (!embeddingsEnabled()) {
         return {
-          error:
-            "Knowledge search is not configured (missing VOYAGE_API_KEY).",
+          error: "Knowledge search is not configured (missing VOYAGE_API_KEY).",
         };
       }
       const vec = await embedQuery(query);

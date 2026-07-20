@@ -63,9 +63,10 @@ async function embedBatch(
     const retryable = res.status === 429 || res.status >= 500;
     if (retryable && attempt < MAX_RETRIES) {
       const retryAfter = Number(res.headers.get("retry-after"));
-      const backoff = Number.isFinite(retryAfter) && retryAfter > 0
-        ? retryAfter * 1000
-        : 2 ** attempt * 1000 + Math.random() * 500;
+      const backoff =
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : 2 ** attempt * 1000 + Math.random() * 500;
       await sleep(backoff);
       continue;
     }
@@ -109,7 +110,11 @@ export async function embedTexts(
   async function worker() {
     while (cursor < batches.length) {
       const batch = batches[cursor++];
-      const vectors = await embedBatch(batch.texts, inputType, apiKey as string);
+      const vectors = await embedBatch(
+        batch.texts,
+        inputType,
+        apiKey as string
+      );
       for (let j = 0; j < vectors.length; j++) {
         results[batch.start + j] = vectors[j];
       }

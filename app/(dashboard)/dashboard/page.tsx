@@ -28,7 +28,10 @@ export default function DashboardPage() {
             Back to chat
           </Link>
           <span>·</span>
-          <Link className="transition-colors hover:text-foreground" href="/feedback">
+          <Link
+            className="transition-colors hover:text-foreground"
+            href="/feedback"
+          >
             Feedback
           </Link>
         </div>

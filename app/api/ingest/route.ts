@@ -1,6 +1,6 @@
 import { put } from "@vercel/blob";
 import { type NextRequest, NextResponse } from "next/server";
-import { embedTexts, embeddingsEnabled } from "@/lib/ai/embeddings";
+import { embeddingsEnabled, embedTexts } from "@/lib/ai/embeddings";
 import { requireOrgContext } from "@/lib/auth/org";
 import type { metricsDaily } from "@/lib/db/imcc-schema";
 import { scopedDb } from "@/lib/db/scoped";
@@ -70,7 +70,9 @@ export async function POST(request: NextRequest) {
   // --- Large-file path: process a file already uploaded to Vercel Blob ------
   // The browser sends { blobUrl, filename } as JSON (no big binary body), we
   // fetch the bytes server-side and run the same extract → chunk → embed flow.
-  if ((request.headers.get("content-type") ?? "").includes("application/json")) {
+  if (
+    (request.headers.get("content-type") ?? "").includes("application/json")
+  ) {
     const { blobUrl, filename } = (await request.json()) as {
       blobUrl?: string;
       filename?: string;
@@ -84,7 +86,9 @@ export async function POST(request: NextRequest) {
     const docType = classifyDocument(filename, "");
     if (!docType) {
       return NextResponse.json(
-        { error: `Unsupported file type: ${filename}. Use PDF, DOCX, TXT, or MD.` },
+        {
+          error: `Unsupported file type: ${filename}. Use PDF, DOCX, TXT, or MD.`,
+        },
         { status: 415 }
       );
     }
@@ -145,7 +149,8 @@ export async function POST(request: NextRequest) {
     ? (platformRaw as Platform)
     : "other";
   const docType = classifyDocument(file.name, file.type);
-  const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
+  const isCsv =
+    file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
 
   // Store the raw upload for audit/reprocessing (only if Blob is configured).
   let blobUrl: string | undefined;
@@ -163,7 +168,10 @@ export async function POST(request: NextRequest) {
   if (isCsv) {
     if (!clientId) {
       return NextResponse.json(
-        { error: "CSV metrics require a client. Upload a PDF/DOCX/TXT/MD for the knowledge base instead." },
+        {
+          error:
+            "CSV metrics require a client. Upload a PDF/DOCX/TXT/MD for the knowledge base instead.",
+        },
         { status: 400 }
       );
     }

@@ -32,7 +32,9 @@ export function Uploader({ onUploaded }: { onUploaded?: () => void }) {
       candidate.name.toLowerCase().endsWith(ext)
     );
     if (!ok) {
-      setResult({ error: `Unsupported file type. Use ${ACCEPTED.join(", ")}.` });
+      setResult({
+        error: `Unsupported file type. Use ${ACCEPTED.join(", ")}.`,
+      });
       return;
     }
     setResult(null);
@@ -78,7 +80,9 @@ export function Uploader({ onUploaded }: { onUploaded?: () => void }) {
       });
       const json = (await res.json().catch(() => null)) as Result | null;
       if (!json) {
-        setResult({ error: `Upload failed (${res.status} ${res.statusText}).` });
+        setResult({
+          error: `Upload failed (${res.status} ${res.statusText}).`,
+        });
         return;
       }
       setResult(json);
@@ -91,7 +95,9 @@ export function Uploader({ onUploaded }: { onUploaded?: () => void }) {
         router.refresh();
       }
     } catch (err) {
-      setResult({ error: err instanceof Error ? err.message : "Upload failed" });
+      setResult({
+        error: err instanceof Error ? err.message : "Upload failed",
+      });
     } finally {
       setPhase("idle");
     }
@@ -99,7 +105,7 @@ export function Uploader({ onUploaded }: { onUploaded?: () => void }) {
 
   return (
     <form className="flex flex-col gap-3" onSubmit={submit}>
-      {/** biome-ignore lint/a11y/noStaticElementInteractions: label wraps a real file input for keyboard/AT access; drag handlers are a mouse-only enhancement */}
+      {/** biome-ignore lint/a11y/noNoninteractiveElementInteractions: label wraps a real file input for keyboard/AT access; drag handlers are a mouse-only enhancement */}
       <label
         className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center transition-colors ${
           dragging
@@ -175,7 +181,8 @@ export function Uploader({ onUploaded }: { onUploaded?: () => void }) {
                 phase === "processing" ? "animate-pulse" : ""
               }`}
               style={{
-                width: phase === "uploading" ? `${Math.max(progress, 2)}%` : "100%",
+                width:
+                  phase === "uploading" ? `${Math.max(progress, 2)}%` : "100%",
               }}
             />
           </div>

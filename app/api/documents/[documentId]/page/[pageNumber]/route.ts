@@ -24,9 +24,7 @@ const UUID_RE =
  */
 export async function GET(
   request: Request,
-  {
-    params,
-  }: { params: Promise<{ documentId: string; pageNumber: string }> }
+  { params }: { params: Promise<{ documentId: string; pageNumber: string }> }
 ) {
   const ctx = await getOrgContext();
   if (!ctx) {
@@ -34,7 +32,11 @@ export async function GET(
   }
   const { documentId, pageNumber: pageRaw } = await params;
   const pageNumber = Number(pageRaw);
-  if (!UUID_RE.test(documentId) || !Number.isInteger(pageNumber) || pageNumber < 1) {
+  if (
+    !UUID_RE.test(documentId) ||
+    !Number.isInteger(pageNumber) ||
+    pageNumber < 1
+  ) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

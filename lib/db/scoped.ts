@@ -184,9 +184,7 @@ export function scopedDb(orgId: string) {
         .orderBy(desc(knowledgeDocument.createdAt));
     },
 
-    insertKnowledgeChunks(
-      rows: (typeof knowledgeChunk.$inferInsert)[]
-    ) {
+    insertKnowledgeChunks(rows: (typeof knowledgeChunk.$inferInsert)[]) {
       if (rows.length === 0) {
         return Promise.resolve([]);
       }

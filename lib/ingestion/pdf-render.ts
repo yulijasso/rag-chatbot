@@ -24,7 +24,7 @@ export async function renderPageWebp(
     const page = doc.getPage(pageNumber - 1);
     const out = await page.render({
       scale,
-      render: async ({ width, height, data }) => {
+      render: ({ width, height, data }) => {
         // pdfium returns BGRA; swap B/R so sharp reads it as RGBA.
         for (let i = 0; i < data.length; i += 4) {
           const b = data[i];

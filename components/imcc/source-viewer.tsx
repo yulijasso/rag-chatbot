@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -84,7 +84,8 @@ export function SourceViewer({
     const acc: Record<number, string[]> = {};
     for (const h of hits) {
       const p = h.pageNumber ?? 1;
-      (acc[p] ??= []).push(h.id);
+      acc[p] ??= [];
+      acc[p].push(h.id);
     }
     return acc;
   }, [hits]);
@@ -181,11 +182,11 @@ function TextView({
                 data-source-first-hit={setRef ? "true" : undefined}
                 key={chunk.id}
               >
-                {chunk.pageNumber != null ? (
+                {chunk.pageNumber == null ? null : (
                   <span className="mr-2 select-none font-medium text-muted-foreground text-xs">
                     p.{chunk.pageNumber}
                   </span>
-                ) : null}
+                )}
                 {chunk.content}
               </div>
             );

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { embedTexts, embeddingsEnabled } from "@/lib/ai/embeddings";
+import { embeddingsEnabled, embedTexts } from "@/lib/ai/embeddings";
 import { db } from "@/lib/db/client";
 import {
   type KnowledgeDocument,

@@ -26,7 +26,10 @@ export default function FeedbackPage() {
             Back to chat
           </Link>
           <span>·</span>
-          <Link className="transition-colors hover:text-foreground" href="/dashboard">
+          <Link
+            className="transition-colors hover:text-foreground"
+            href="/dashboard"
+          >
             Knowledge base
           </Link>
         </div>
@@ -63,8 +66,8 @@ async function Content() {
   if (items.length === 0) {
     return (
       <p className="rounded-xl border border-border/50 border-dashed py-10 text-center text-muted-foreground text-sm">
-        No downvoted answers yet. When you 👎 an answer in chat, it shows up here
-        for review.
+        No downvoted answers yet. When you 👎 an answer in chat, it shows up
+        here for review.
       </p>
     );
   }
@@ -119,7 +122,10 @@ async function Content() {
                 <AlertTriangle className="size-3.5 shrink-0" />
                 <span>
                   No sources retrieved — likely a knowledge-base gap.{" "}
-                  <Link className="underline underline-offset-2" href="/dashboard">
+                  <Link
+                    className="underline underline-offset-2"
+                    href="/dashboard"
+                  >
                     Upload a document
                   </Link>
                 </span>

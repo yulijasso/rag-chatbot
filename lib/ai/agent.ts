@@ -30,9 +30,11 @@ export type AssistantInput = {
   messages: { role: "user" | "assistant"; content: string }[];
 };
 
+// biome-ignore lint/suspicious/useAwait: stub — the real LangChain agent stream will be async
 export async function streamAssistant(input: AssistantInput) {
-  const tools = makeTools(input.scope);
-  void tools; // hand these to your LangChain agent
+  // `makeTools(input.scope)` gives the org/client-scoped retrieval tools to
+  // hand your LangChain agent.
+  makeTools(input.scope);
 
   // TODO(you): build + return the LangChain agent stream.
   throw new Error(

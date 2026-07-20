@@ -1,5 +1,5 @@
 import { scopedDb } from "@/lib/db/scoped";
-import { embedQuery, embeddingsEnabled } from "./embeddings";
+import { embeddingsEnabled, embedQuery } from "./embeddings";
 
 /**
  * The agent's tools. This is the HYBRID-RETRIEVAL seam:

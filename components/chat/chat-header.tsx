@@ -3,9 +3,9 @@
 import { LayoutDashboard, PanelLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { memo } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { VercelIcon } from "./icons";
 import { VisibilitySelector, type VisibilityType } from "./visibility-selector";
 

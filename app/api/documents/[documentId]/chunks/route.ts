@@ -42,8 +42,12 @@ export async function GET(
     .select({
       id: knowledgeChunk.id,
       content: knowledgeChunk.content,
-      pageNumber: sql<number | null>`(${knowledgeChunk.metadata}->>'pageNumber')::int`,
-      chunkIndex: sql<number | null>`(${knowledgeChunk.metadata}->>'chunkIndex')::int`,
+      pageNumber: sql<
+        number | null
+      >`(${knowledgeChunk.metadata}->>'pageNumber')::int`,
+      chunkIndex: sql<
+        number | null
+      >`(${knowledgeChunk.metadata}->>'chunkIndex')::int`,
     })
     .from(knowledgeChunk)
     .where(

@@ -32,7 +32,11 @@ export function classifyDocument(
   ) {
     return "docx";
   }
-  if (name.endsWith(".txt") || name.endsWith(".md") || mimeType === "text/plain") {
+  if (
+    name.endsWith(".txt") ||
+    name.endsWith(".md") ||
+    mimeType === "text/plain"
+  ) {
     return "text";
   }
   return null;
@@ -101,7 +105,11 @@ export function chunkPages(
   let chunkIndex = 0;
   for (const page of pages) {
     for (const content of chunkText(page.text, opts)) {
-      out.push({ content, pageNumber: page.pageNumber, chunkIndex: chunkIndex++ });
+      out.push({
+        content,
+        pageNumber: page.pageNumber,
+        chunkIndex: chunkIndex++,
+      });
     }
   }
   return out;
@@ -114,9 +122,15 @@ export function chunkPages(
  */
 export function chunkText(
   text: string,
-  { maxChars = 1000, overlap = 150 }: { maxChars?: number; overlap?: number } = {}
+  {
+    maxChars = 1000,
+    overlap = 150,
+  }: { maxChars?: number; overlap?: number } = {}
 ): string[] {
-  const clean = text.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const clean = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   if (!clean) {
     return [];
   }
@@ -146,7 +160,7 @@ export function chunkText(
     if (current.length + para.length + 2 > maxChars) {
       push();
       // Carry a tail of the previous chunk forward as overlap.
-      current = current.slice(-overlap) + "\n\n" + para;
+      current = `${current.slice(-overlap)}\n\n${para}`;
     } else {
       current = current ? `${current}\n\n${para}` : para;
     }

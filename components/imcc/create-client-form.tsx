@@ -13,8 +13,6 @@ export function CreateClientForm() {
 
   return (
     <form
-      className="flex flex-col gap-2 sm:flex-row sm:items-start"
-      ref={formRef}
       action={(formData) => {
         setError(null);
         startTransition(async () => {
@@ -26,6 +24,8 @@ export function CreateClientForm() {
           }
         });
       }}
+      className="flex flex-col gap-2 sm:flex-row sm:items-start"
+      ref={formRef}
     >
       <div className="flex flex-1 flex-col gap-2 sm:flex-row">
         <Input name="name" placeholder="Client name" required />
